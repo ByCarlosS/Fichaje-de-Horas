@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Fichaje de entrada y salida y cálculo de horas extra.">
+<meta name="author" content="ByCarlosS">
+<meta name="theme-color" content="#16202A">
+<title>Mis Horas Extra</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="anim" style="--i:0">
+    <h1>Mis Horas Extra</h1>
+    <span class="store" id="storeLabel">Cargando…</span>
+  </header>
+
+  <section style="--i:1" class="anim panel clock" aria-label="Fichaje">
+    <div>
+      <div class="now" id="now">--:--:--</div>
+      <div class="date" id="today"></div>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">Fuera de servicio</span></div>
+    </div>
+    <div class="punchside">
+      <button class="punch" id="punch">Fichar entrada</button>
+      <label class="label" for="pConcepto" style="margin-top:2px">Concepto del fichaje</label>
+      <select id="pConcepto"></select>
+      <label class="check" id="pDescBox" hidden><input type="checkbox" id="pDesc"> No he podido coger el descanso</label>
+    </div>
+  </section>
+
+  <section class="anim" style="--i:2;display:flex;flex-direction:column;gap:12px" aria-label="Resumen del mes">
+    <div class="monthbar">
+      <button class="ghost" id="prev" aria-label="Mes anterior">‹</button>
+      <h2 id="monthTitle"></h2>
+      <button class="ghost" id="next" aria-label="Mes siguiente">›</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="label">Trabajadas</div><div class="v" id="sTotal">0:00</div><div class="s" id="sDays">0 días</div></div>
+      <div class="stat hl"><div class="label">Horas extra</div><div class="v" id="sExtra">0:00</div><div class="s" id="sExtraDays">—</div></div>
+      <div class="stat"><div class="label">Media / día</div><div class="v" id="sAvg">0:00</div><div class="s" id="sJornada">Según día</div></div>
+      <div class="stat"><div class="label">Importe extra</div><div class="v" id="sMoney">—</div><div class="s" id="sPrice">Pon tu precio/hora</div></div>
+    </div>
+    <div class="breakdown" id="breakdown"></div>
+  </section>
+
+  <details class="panel anim" style="--i:3" id="formBox">
+    <summary id="formTitle">Añadir o corregir un registro a mano</summary>
+    <form id="form" autocomplete="off">
+      <div class="field wide"><label class="label" for="fFecha">Fecha</label><input type="date" id="fFecha" required></div>
+      <div class="field"><label class="label" for="fIn">Entrada</label><input type="time" id="fIn" required></div>
+      <div class="field"><label class="label" for="fOut">Salida</label><input type="time" id="fOut"></div>
+      <div class="field"><label class="label" for="fDesc">Descanso</label><select id="fDesc"><option value="0">Cogido</option><option value="60">No cogido (1 h)</option><option value="45">Faltaron 45 min</option><option value="30">Faltaron 30 min</option><option value="15">Faltaron 15 min</option></select></div>
+      <div class="field wide"><label class="label" for="fConcepto">Concepto</label><select id="fConcepto"></select></div>
+      <div class="field wide" id="fOtroBox" hidden><label class="label" for="fOtro">Nombre del concepto</label><input type="text" id="fOtro" maxlength="60" placeholder="Ej.: Espera en aeropuerto"></div>
+      <div class="field full"><label class="label" for="fNota">Servicio / nota</label><input type="text" id="fNota" maxlength="120" placeholder="Ej.: Traslado aeropuerto Alicante"></div>
+      <p class="hint full" id="fConceptoHint" style="margin:0"></p>
+      <div class="actions full">
+        <button class="primary" type="submit" id="fSubmit">Añadir registro</button>
+        <button class="ghost" type="button" id="fCancel" hidden>Cancelar</button>
+        <span class="hint">Si la salida es menor que la entrada, cuenta como día siguiente (turno de noche).</span>
+        <span class="msg" id="fMsg"></span>
+      </div>
+    </form>
+  </details>
+
+  <section style="--i:4" class="anim log" id="log" aria-label="Registro del mes"></section>
+
+  <details class="panel anim" style="--i:5">
+    <summary>Ajustes de jornada, precio y datos del PDF</summary>
+    <form id="cfg" style="grid-template-columns:1fr 1fr">
+      <div class="field"><label class="label" for="cNombre">Nombre en el PDF</label><input type="text" id="cNombre" maxlength="80" placeholder="Tu nombre y apellidos"></div>
+      <div class="field"><label class="label" for="cEmpresa">Empresa</label><input type="text" id="cEmpresa" maxlength="80" placeholder="Nombre de la empresa"></div>
+      <div class="field full"><span class="label">Jornada por día (horas, con descanso y lavado incluidos)</span>
+        <div class="week" id="cWeek"></div>
+      </div>
+      <div class="field"><label class="label" for="cDescanso">Descanso incluido (min)</label><input type="number" id="cDescanso" min="0" max="240" step="5" inputmode="numeric"></div>
+      <div class="field"><label class="label" for="cLavado">Lavado de coche (min)</label><input type="number" id="cLavado" min="0" max="240" step="5" inputmode="numeric"></div>
+      <div class="field"><label class="label" for="cPrecio">Precio hora extra (€)</label><input type="number" id="cPrecio" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></div>
+      <div class="actions full"><button class="primary" type="submit">Guardar ajustes</button><span class="hint" id="cMsg">Lo que pase de la jornada de ese día y el descanso que no cojas cuentan como extra.</span></div>
+    </form>
+  </details>
+
+  <footer class="anim" style="--i:6">
+    <span></span>
+    <span class="actions"><button class="ghost" id="csv" hidden>CSV</button><button class="primary" id="pdf" hidden>Descargar mes en PDF</button></span>
+  </footer>
+  <span class="msg" id="dlMsg"></span>
+  <p class="copy anim" style="--i:7">© <span id="year">2026</span> <strong>ByCarlosS</strong> · Todos los derechos reservados</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
