@@ -137,3 +137,15 @@ details[open].panel > form{animation:subir .35s ease both}
   *,*::before,*::after{animation:none!important;transition:none!important}
   .anim{opacity:1}
 }
+
+/* Cuenta / sincronización */
+.account{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.account .primary{padding:8px 14px;font-size:14px}
+.store.sync{color:var(--on);font-weight:600}
+.store.sync::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--on);margin-right:6px;vertical-align:middle}
+
+/* Aviso de primera vez */
+.aviso{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;border-color:var(--accent);background:var(--chip);animation:aparecer .4s ease both}
+.aviso div{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 260px}
+.aviso strong{font-family:var(--display);font-size:20px;text-transform:uppercase;color:var(--fg)}
+.aviso span{color:var(--fg);opacity:.85;font-size:14px}

@@ -19,8 +19,8 @@ const conceptoDe=f=>C[f.concepto]||C.normal;
 const nombreConcepto=f=>f.concepto==='otro'?(f.conceptoTexto||'Otro'):conceptoDe(f).nombre;
 
 let fichajes=new Map();
-const JORNADAS_DEF=[10,10,10,10,10,12,12]; // índice = día de la semana (0 domingo … 6 sábado)
-const AJ_DEF={jornadas:JORNADAS_DEF, descanso:60, lavado:60, precio:0, nombre:'', empresa:''};
+const JORNADAS_DEF=[0,8,8,8,8,8,0]; // índice = día de la semana (0 domingo … 6 sábado); 0 = día libre
+const AJ_DEF={jornadas:JORNADAS_DEF, descanso:0, lavado:0, precio:0, nombre:'', empresa:''};
 const normAjustes=v=>{const a={...AJ_DEF,...(v||{})}; if(!Array.isArray(a.jornadas)||a.jornadas.length!==7) a.jornadas=[...JORNADAS_DEF]; delete a.jornada; return a};
 let ajustes=normAjustes();
 const LETRAS=['D','L','M','X','J','V','S'];
@@ -82,23 +82,49 @@ function localStore(){
     async remove(id){fichajes.delete(id);persist();render()},
     async saveAjustes(a){ajustes=a;persist();render()}};
 }
-async function dbStore(db,uid){
-  const col=db.collection('data/users/'+uid);
-  const queue=new Map();
-  const run=(id,fn)=>{const p=(queue.get(id)||Promise.resolve()).then(fn,fn);queue.set(id,p.catch(()=>{}));return p};
-  col.onSnapshot(snap=>{
-    const m=new Map();
-    for(const d of snap.docs){ const v=d.data(); if(!v) continue;
-      if(d.id==='ajustes') ajustes=normAjustes(v);
-      else if(v.entrada) m.set(d.id,{...v}); }
-    fichajes=m; render();
-  },()=>{$('#storeLabel').textContent='Sin conexión con tu cuenta. Recarga la página.'});
-  return {kind:'db',
-    save(id,d){ultimoGuardado=id;fichajes.set(id,d);render();return run(id,()=>col.doc(id).set(d))},
-    remove(id){fichajes.delete(id);render();return run(id,()=>col.doc(id).delete())},
-    saveAjustes(a){ajustes=a;render();return run('ajustes',()=>col.doc('ajustes').set(a))}};
+/* Nube (Firebase): usuarios/{uid}/fichajes/{id} y usuarios/{uid}/config/ajustes */
+const fbListo=typeof firebase!=='undefined'&&window.FIREBASE_CONFIG&&FIREBASE_CONFIG.apiKey&&!/^PEGA/.test(FIREBASE_CONFIG.apiKey);
+let usuario=null;
+function refs(u){
+  const base=firebase.firestore().collection('usuarios').doc(u.uid);
+  return {col:base.collection('fichajes'), aj:base.collection('config').doc('ajustes')};
 }
-const storeLabel=()=>{$('#storeLabel').textContent=store.kind==='db'?'Guardado en tu cuenta':'Guardado en este dispositivo'};
+async function subirLocales(u){
+  const key='horas-extra-subido-'+u.uid;
+  try{ if(localStorage.getItem(key)) return; }catch(e){ return; }
+  let raw={}; try{raw=JSON.parse(localStorage.getItem(LSKEY)||'{}')}catch(e){}
+  const {col,aj}=refs(u), locales=Object.entries(raw.fichajes||{});
+  for(let i=0;i<locales.length;i+=400){
+    const batch=firebase.firestore().batch();
+    locales.slice(i,i+400).forEach(([id,f])=>batch.set(col.doc(id),f,{merge:true}));
+    await batch.commit();
+  }
+  if(raw.ajustes){ const d=await aj.get(); if(!d.exists) await aj.set(normAjustes(raw.ajustes)); }
+  try{ localStorage.setItem(key,'1'); }catch(e){}
+}
+function nubeStore(u){
+  const {col,aj}=refs(u);
+  fichajes=new Map(); render();
+  const err=()=>{$('#storeLabel').textContent='No se pudo conectar con la nube. Revisa las reglas de Firestore.'};
+  const s1=col.onSnapshot(snap=>{const m=new Map(); snap.forEach(d=>{const v=d.data(); if(v&&v.entrada) m.set(d.id,{...v})}); fichajes=m; render();},err);
+  const s2=aj.onSnapshot(d=>{
+    if(d.exists){ ajustes=normAjustes(d.data()); $('#aviso').hidden=true; }
+    else { ajustes=normAjustes({nombre:u.displayName||''}); $('#aviso').hidden=false; }
+    render();
+  },err);
+  const fallo=()=>{$('#storeLabel').textContent='No se pudo guardar en la nube. Inténtalo de nuevo.'};
+  return {kind:'nube', stop(){s1();s2();$('#aviso').hidden=true;},
+    save(id,d){ultimoGuardado=id;fichajes.set(id,d);render();return col.doc(id).set(d).catch(fallo)},
+    remove(id){fichajes.delete(id);render();return col.doc(id).delete().catch(fallo)},
+    saveAjustes(a){ajustes=a;render();return aj.set(a).catch(fallo)}};
+}
+function storeLabel(){
+  const l=$('#storeLabel');
+  if(store.kind==='nube'){ l.textContent=`Sincronizado · ${usuario.email||usuario.displayName||'tu cuenta'}`; l.classList.add('sync'); }
+  else { l.textContent=fbListo?'Sin sesión · solo en este dispositivo':'Guardado en este dispositivo'; l.classList.remove('sync'); }
+  $('#login').hidden=!fbListo||store.kind==='nube';
+  $('#logout').hidden=store.kind!=='nube';
+}
 
 /* ---------- render ---------- */
 function tick(){
@@ -123,7 +149,7 @@ function render(){
   const r=calcularMes(mes.y,mes.m);
   $('#log').innerHTML=r.dias.length?r.dias.map((d,di)=>{
     const dd=parse(d.fecha+'T00:00');
-    return `<article class="day" style="--d:${di}"><div class="dayhead"><span class="d">${DIAS[dd.getDay()]} ${dd.getDate()} ${MESES[dd.getMonth()].slice(0,3)}</span><span class="t">${d.jornada?`<span class="chip" title="Conducción ${fmt(conduccionMin(d.jornada))} h">jornada ${fmt(d.jornada)}</span>`:''}<span class="chip">${fmt(d.total)} h</span>${d.extra>0?`<span class="chip extra">+${fmt(d.extra)} extra</span>`:''}</span></div>`+
+    return `<article class="day" style="--d:${di}"><div class="dayhead"><span class="d">${DIAS[dd.getDay()]} ${dd.getDate()} ${MESES[dd.getMonth()].slice(0,3)}</span><span class="t">${d.jornada?`<span class="chip" title="Tiempo efectivo ${fmt(conduccionMin(d.jornada))} h">jornada ${fmt(d.jornada)}</span>`:''}<span class="chip">${fmt(d.total)} h</span>${d.extra>0?`<span class="chip extra">+${fmt(d.extra)} extra</span>`:''}</span></div>`+
     d.filas.map(({id,f,min,dnc:sinDesc})=>{
       const salida=f.salida?f.salida.slice(11):'<span class="open-tag">en curso</span>';
       const noct=f.salida&&f.salida.slice(0,10)!==f.entrada.slice(0,10)?' <span class="hint">(+1)</span>':'';
@@ -151,7 +177,7 @@ function render(){
 $('#cWeek').innerHTML=[1,2,3,4,5,6,0].map(i=>`<label for="cW${i}">${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][i]}<input type="number" id="cW${i}" min="0" max="24" step="0.25" inputmode="decimal"><span class="split" id="cS${i}"></span></label>`).join('');
 function splitWeek(){
   const d=Number($('#cDescanso').value)||0, l=Number($('#cLavado').value)||0;
-  for(let i=0;i<7;i++){ const j=(parseFloat($('#cW'+i).value)||0)*60; $('#cS'+i).textContent=j?`${fmt(Math.max(0,j-d-l))} cond.`:'libre'; }
+  for(let i=0;i<7;i++){ const j=(parseFloat($('#cW'+i).value)||0)*60; $('#cS'+i).textContent=j?`${fmt(Math.max(0,j-d-l))} efect.`:'libre'; }
 }
 $('#cfg').addEventListener('input',splitWeek);
 const opts=CONCEPTOS.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
@@ -213,7 +239,7 @@ $('#log').addEventListener('click',e=>{
 $('#cfg').addEventListener('submit',e=>{
   e.preventDefault();
   const p=parseFloat($('#cPrecio').value), num=(v,d)=>{const n=parseFloat(v);return isFinite(n)&&n>=0?n:d};
-  store.saveAjustes({jornadas:[0,1,2,3,4,5,6].map(i=>num($('#cW'+i).value,JORNADAS_DEF[i])), descanso:num($('#cDescanso').value,60), lavado:num($('#cLavado').value,60), precio:isFinite(p)&&p>=0?p:0, nombre:$('#cNombre').value.trim(), empresa:$('#cEmpresa').value.trim()});
+  store.saveAjustes({jornadas:[0,1,2,3,4,5,6].map(i=>num($('#cW'+i).value,JORNADAS_DEF[i])), descanso:num($('#cDescanso').value,0), lavado:num($('#cLavado').value,0), precio:isFinite(p)&&p>=0?p:0, nombre:$('#cNombre').value.trim(), empresa:$('#cEmpresa').value.trim()});
   $('#cMsg').textContent='Ajustes guardados.';
 });
 
@@ -277,10 +303,35 @@ $('#year').textContent=new Date().getFullYear();
 store=localStore(); storeLabel(); resetForm(); render();
 $('#csv').hidden=false; if(window.jspdf) $('#pdf').hidden=false;
 setInterval(tick,1000);
-(async()=>{
-  if(!window.claude?.use) return;
-  downloads=null;
-  try{ const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]); const uid=user?await user.id():null; if(db&&uid){store=await dbStore(db,uid); storeLabel();} }catch(e){}
-  try{ downloads=await claude.use('downloads'); }catch(e){}
-})();
+if(fbListo){
+  firebase.initializeApp(FIREBASE_CONFIG);
+  firebase.firestore().enablePersistence({synchronizeTabs:true}).catch(()=>{}); // funciona sin cobertura y sincroniza después
+  const auth=firebase.auth();
+  auth.getRedirectResult().catch(e=>{$('#loginMsg').textContent=mensajeLogin(e)});
+  auth.onAuthStateChanged(async u=>{
+    if(store&&store.stop) store.stop();
+    usuario=u;
+    if(u){ $('#storeLabel').textContent='Sincronizando…'; try{await subirLocales(u)}catch(e){} store=nubeStore(u); }
+    else { store=localStore(); render(); }
+    storeLabel();
+  });
+  $('#login').addEventListener('click',async()=>{
+    $('#loginMsg').textContent='';
+    const p=new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'});
+    try{ await auth.signInWithPopup(p); }
+    catch(e){
+      if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){ try{await auth.signInWithRedirect(p)}catch(e2){$('#loginMsg').textContent=mensajeLogin(e2)} }
+      else $('#loginMsg').textContent=mensajeLogin(e);
+    }
+  });
+  $('#logout').addEventListener('click',()=>auth.signOut());
+  $('#avisoBtn').addEventListener('click',()=>{ const b=$('#ajustesBox'); b.open=true; b.scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(()=>$('#cW1').focus(),400); });
+}
+function mensajeLogin(e){
+  const c=e&&e.code||'';
+  if(c==='auth/popup-closed-by-user'||c==='auth/cancelled-popup-request') return '';
+  if(c==='auth/unauthorized-domain') return 'Este dominio no está autorizado en Firebase. Añádelo en Authentication → Configuración → Dominios autorizados.';
+  if(c==='auth/network-request-failed') return 'Sin conexión. Inténtalo cuando tengas internet.';
+  return 'No se pudo iniciar sesión ('+c+').';
+}
 })();

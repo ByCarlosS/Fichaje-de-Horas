@@ -16,8 +16,18 @@
 <div class="wrap">
   <header class="anim" style="--i:0">
     <h1>Mis Horas Extra</h1>
-    <span class="store" id="storeLabel">Cargando…</span>
+    <div class="account">
+      <span class="store" id="storeLabel">Cargando…</span>
+      <button class="primary" id="login" hidden>Iniciar sesión con Google</button>
+      <button class="link" id="logout" hidden>Cerrar sesión</button>
+    </div>
+    <span class="msg" id="loginMsg" style="flex-basis:100%;text-align:right"></span>
   </header>
+
+  <section class="panel aviso" id="aviso" hidden>
+    <div><strong>Configura tu jornada</strong><span>Indica cuántas horas trabajas cada día para que las horas extra se calculen bien. Solo hace falta una vez.</span></div>
+    <button class="primary" id="avisoBtn">Configurar mi jornada</button>
+  </section>
 
   <section style="--i:1" class="anim panel clock" aria-label="Fichaje">
     <div>
@@ -70,7 +80,7 @@
 
   <section style="--i:4" class="anim log" id="log" aria-label="Registro del mes"></section>
 
-  <details class="panel anim" style="--i:5">
+  <details class="panel anim" style="--i:5" id="ajustesBox">
     <summary>Ajustes de jornada, precio y datos del PDF</summary>
     <form id="cfg" style="grid-template-columns:1fr 1fr">
       <div class="field"><label class="label" for="cNombre">Nombre en el PDF</label><input type="text" id="cNombre" maxlength="80" placeholder="Tu nombre y apellidos"></div>
@@ -79,7 +89,7 @@
         <div class="week" id="cWeek"></div>
       </div>
       <div class="field"><label class="label" for="cDescanso">Descanso incluido (min)</label><input type="number" id="cDescanso" min="0" max="240" step="5" inputmode="numeric"></div>
-      <div class="field"><label class="label" for="cLavado">Lavado de coche (min)</label><input type="number" id="cLavado" min="0" max="240" step="5" inputmode="numeric"></div>
+      <div class="field"><label class="label" for="cLavado">Otras tareas incluidas (min)</label><input type="number" id="cLavado" min="0" max="240" step="5" inputmode="numeric"></div>
       <div class="field"><label class="label" for="cPrecio">Precio hora extra (€)</label><input type="number" id="cPrecio" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></div>
       <div class="actions full"><button class="primary" type="submit">Guardar ajustes</button><span class="hint" id="cMsg">Lo que pase de la jornada de ese día y el descanso que no cojas cuentan como extra.</span></div>
     </form>
@@ -95,6 +105,10 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
